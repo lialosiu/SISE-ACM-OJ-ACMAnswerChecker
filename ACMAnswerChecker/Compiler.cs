@@ -8,100 +8,62 @@ using System.Threading.Tasks;
 
 namespace ACMAnswerChecker
 {
-    class Compiler
+    static class Compiler
     {
-        private int _ExitCode;
-        public int ExitCode
+
+        public static string ErrorInfo { get; private set; }
+
+        public static int Compile(string workingDirectory, Answer thisAnswer)
         {
-            get
+            string srcFilePath;
+
+            var exep = new Process
             {
-                return this._ExitCode;
-            }
-        }
+                StartInfo =
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
 
-        private string _StdErr;
-        public string StdErr
-        {
-            get
+            switch (thisAnswer.LanguageCode)
             {
-                return this._StdErr;
+                case Const._LanguageCode_C:
+                    srcFilePath = workingDirectory + "Main.c";
+                    exep.StartInfo.FileName = "gcc";
+                    exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
+                    break;
+                case Const._LanguageCode_CPP:
+                    srcFilePath = workingDirectory + "Main.cpp";
+                    exep.StartInfo.FileName = "g++";
+                    exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -DONLINE_JUDGE";
+                    break;
+                case Const._LanguageCode_Java:
+                    srcFilePath = workingDirectory + "Main.java";
+                    exep.StartInfo.FileName = "javac";
+                    exep.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + srcFilePath;
+                    break;
+                default:
+                    throw new Exception("不支持的语言类型");
             }
-        }
 
+            var streamWriter = new StreamWriter(File.Create(srcFilePath));
+            streamWriter.Write(thisAnswer.SourceCode);
+            streamWriter.Close();
 
-        public bool GCC(string dirPath, string SrcFileName)
-        {
-            Process exep = new Process();
-            exep.StartInfo.FileName = "gcc";
-            exep.StartInfo.Arguments = dirPath + SrcFileName + " -o " + dirPath + "Main.exe -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
-            exep.StartInfo.CreateNoWindow = true;
-            exep.StartInfo.UseShellExecute = false;
-            exep.StartInfo.RedirectStandardOutput = true;
-            exep.StartInfo.RedirectStandardError = true;
             exep.Start();
             exep.WaitForExit();
 
-            this._ExitCode = exep.ExitCode;
+            var exitCode = exep.ExitCode;
+            if (exitCode != 0)
+            {
+                ErrorInfo = exep.StandardError.ReadToEnd();
+            }
 
-            if (this._ExitCode == 0)
-            {
-                return true;
-            }
-            else
-            {
-                this._StdErr = exep.StandardError.ReadToEnd();
-                return false;
-            }
+            return exitCode;
         }
 
-        public bool GPP(string dirPath, string SrcFileName)
-        {
-            Process exep = new Process();
-            exep.StartInfo.FileName = "g++";
-            exep.StartInfo.Arguments = dirPath + SrcFileName + " -o " + dirPath + "Main.exe -O2 -Wall -lm --static -DONLINE_JUDGE";
-            exep.StartInfo.CreateNoWindow = true;
-            exep.StartInfo.UseShellExecute = false;
-            exep.StartInfo.RedirectStandardOutput = true;
-            exep.StartInfo.RedirectStandardError = true;
-            exep.Start();
-            exep.WaitForExit();
-
-            this._ExitCode = exep.ExitCode;
-
-            if (this._ExitCode == 0)
-            {
-                return true;
-            }
-            else
-            {
-                this._StdErr = exep.StandardError.ReadToEnd();
-                return false;
-            }
-        }
-
-        public bool JDK(string dirPath, string SrcFileName)
-        {
-            Process exep = new Process();
-            exep.StartInfo.FileName = "javac";
-            exep.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + dirPath + SrcFileName;
-            exep.StartInfo.CreateNoWindow = true;
-            exep.StartInfo.UseShellExecute = false;
-            exep.StartInfo.RedirectStandardOutput = true;
-            exep.StartInfo.RedirectStandardError = true;
-            exep.Start();
-            exep.WaitForExit();
-
-            this._ExitCode = exep.ExitCode;
-
-            if (this._ExitCode == 0)
-            {
-                return true;
-            }
-            else
-            {
-                this._StdErr = exep.StandardError.ReadToEnd();
-                return false;
-            }
-        }
     }
 }

@@ -3,231 +3,193 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ACMAnswerChecker
 {
-    class Runner
+    static class Runner
     {
-        Int64 TimeLimit = 0;
-        Int64 MemoryLimit = 0;
+        private static readonly Dictionary<long, string> ExitCodeDictionary = new Dictionary<long, string>();
+        
+        public static Process Exep { get; private set; }
+        public static Int64 TimeLimit { get; private set; }
+        public static Int64 MemoryLimit { get; private set; }
+        public static Int64 UsedTime { get; private set; }
+        public static Int64 UsedMemory { get; private set; }
+        public static Int16 StatusCode { get; private set; }
 
-        private Int64 _UsedTime = 0;
-        public Int64 UsedTime
+        public static void InitExitCodeDictionary()
         {
-            get
+            ExitCodeDictionary.Add(-1073741510, "CONTROL_C_EXIT");
+            ExitCodeDictionary.Add(1073807369, "DBG_COMMAND_EXCEPTION");
+            ExitCodeDictionary.Add(65538, "DBG_CONTINUE");
+            ExitCodeDictionary.Add(1073807368, "DBG_CONTROL_BREAK");
+            ExitCodeDictionary.Add(1073807365, "DBG_CONTROL_C");
+            ExitCodeDictionary.Add(65537, "DBG_EXCEPTION_HANDLED");
+            ExitCodeDictionary.Add(-2147418111, "DBG_EXCEPTION_NOT_HANDLED");
+            ExitCodeDictionary.Add(1073807364, "DBG_TERMINATE_PROCESS");
+            ExitCodeDictionary.Add(1073807363, "DBG_TERMINATE_THREAD");
+            ExitCodeDictionary.Add(-1073741819, "EXCEPTION_ACCESS_VIOLATION");
+            ExitCodeDictionary.Add(-1073741684, "EXCEPTION_ARRAY_BOUNDS_EXCEEDED");
+            ExitCodeDictionary.Add(-2147483645, "EXCEPTION_BREAKPOINT");
+            ExitCodeDictionary.Add(-2147483646, "EXCEPTION_DATATYPE_MISALIGNMENT");
+            ExitCodeDictionary.Add(-1073741683, "EXCEPTION_FLT_DENORMAL_OPERAND");
+            ExitCodeDictionary.Add(-1073741682, "EXCEPTION_FLT_DIVIDE_BY_ZERO");
+            ExitCodeDictionary.Add(-1073741681, "EXCEPTION_FLT_INEXACT_RESULT");
+            ExitCodeDictionary.Add(-1073741680, "EXCEPTION_FLT_INVALID_OPERATION");
+            ExitCodeDictionary.Add(-1073741679, "EXCEPTION_FLT_OVERFLOW");
+            ExitCodeDictionary.Add(-1073741678, "EXCEPTION_FLT_STACK_CHECK");
+            ExitCodeDictionary.Add(-1073741677, "EXCEPTION_FLT_UNDERFLOW");
+            ExitCodeDictionary.Add(-2147483647, "EXCEPTION_GUARD_PAGE");
+            ExitCodeDictionary.Add(-1073741795, "EXCEPTION_ILLEGAL_INSTRUCTION");
+            ExitCodeDictionary.Add(-1073741676, "EXCEPTION_INT_DIVIDE_BY_ZERO");
+            ExitCodeDictionary.Add(-1073741675, "EXCEPTION_INT_OVERFLOW");
+            ExitCodeDictionary.Add(-1073741786, "EXCEPTION_INVALID_DISPOSITION");
+            ExitCodeDictionary.Add(-1073741816, "EXCEPTION_INVALID_HANDLE");
+            ExitCodeDictionary.Add(-1073741818, "EXCEPTION_IN_PAGE_ERROR");
+            ExitCodeDictionary.Add(-1073741787, "EXCEPTION_NONCONTINUABLE_EXCEPTION");
+            ExitCodeDictionary.Add(-1073741674, "EXCEPTION_PRIV_INSTRUCTION");
+            ExitCodeDictionary.Add(-2147483644, "EXCEPTION_SINGLE_STEP");
+            ExitCodeDictionary.Add(-1073741571, "EXCEPTION_STACK_OVERFLOW");
+            ExitCodeDictionary.Add(128, "STATUS_ABANDONED_WAIT_0");
+            ExitCodeDictionary.Add(-1073741801, "STATUS_NO_MEMORY");
+            ExitCodeDictionary.Add(259, "STATUS_PENDING");
+            ExitCodeDictionary.Add(-1073741111, "STATUS_REG_NAT_CONSUMPTION");
+            ExitCodeDictionary.Add(1073741829, "STATUS_SEGMENT_NOTIFICATION");
+            ExitCodeDictionary.Add(-1072365553, "STATUS_SXS_EARLY_DEACTIVATION");
+            ExitCodeDictionary.Add(-1072365552, "STATUS_SXS_INVALID_DEACTIVATION");
+            ExitCodeDictionary.Add(258, "STATUS_TIMEOUT");
+            ExitCodeDictionary.Add(192, "STATUS_USER_APC");
+        }
+
+        public static int Run(string workingDirectory, Answer thisAnswer, Problem thisProblem)
+        {
+            Exep = new Process
             {
-                return this._UsedTime;
-            }
-        }
+                StartInfo =
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
 
-        private Int64 _UsedMemory = 0;
-        public Int64 UsedMemory
-        {
-            get
+            switch (thisAnswer.LanguageCode)
             {
-                return this._UsedMemory;
+                case Const._LanguageCode_C:
+                case Const._LanguageCode_CPP:
+                    Exep.StartInfo.FileName = workingDirectory + "Main.exe";
+                    TimeLimit = thisProblem.TimeLimitNormal * 1000;
+                    MemoryLimit = thisProblem.MemoryLimitNormal * 1000;
+                    break;
+                case Const._LanguageCode_Java:
+                    Exep.StartInfo.FileName = "java";
+                    Exep.StartInfo.Arguments = "-cp " + workingDirectory + " " + "Main";
+                    TimeLimit = thisProblem.TimeLimitJava * 1000;
+                    MemoryLimit = thisProblem.MemoryLimitJava * 1000;
+                    break;
+                default:
+                    throw new Exception("不支持的语言类型");
             }
-        }
-
-        private int _StatusCode = 0;
-        public int StatusCode
-        {
-            get
-            {
-                return this._StatusCode;
-            }
-        }
-
-        private bool _IsSuccess = false;
-        public bool IsSuccess
-        {
-            get
-            {
-                return this._IsSuccess;
-            }
-        }
-
-        private StringBuilder _OutputData = new StringBuilder();
-        public string OutputData
-        {
-            get
-            {
-                return this._OutputData.ToString();
-            }
-        }
-
-        Process Exep = null;
-
-        public Runner(Int64 timeLimit, Int64 memoryLimit)
-        {
-            this.TimeLimit = timeLimit;
-            this.MemoryLimit = memoryLimit;
-        }
-
-        public bool RunEXE(string dirPath, string exeFileName, string inputData)
-        {
-            this.Exep = new Process();
-            this.Exep.StartInfo.FileName = dirPath + exeFileName;
-            this.Exep.StartInfo.CreateNoWindow = true;
-            this.Exep.StartInfo.UseShellExecute = false;
-            this.Exep.StartInfo.RedirectStandardInput = true;
-            this.Exep.StartInfo.RedirectStandardOutput = true;
 
             try
             {
-                this._StatusCode = 0;
-                this._IsSuccess = true;
-
                 //启动进程
-                this.Exep.Start();
+                Exep.Start();
+
+                StatusCode = Const._StatusCode_Accepted;
 
                 //启动计时线程
-                Thread programRunner_TimeChecker = new Thread(Thread_ProgramRunner_TimeChecker);
-                programRunner_TimeChecker.Start();
+                var threadTimechecker = new Thread(Watch);
+                threadTimechecker.Start();
 
                 //设置最大使用内存
-                
-                if (this.Exep.MaxWorkingSet.ToInt64() > this.MemoryLimit)
+
+                if (Exep.MaxWorkingSet.ToInt64() < MemoryLimit)
                 {
-                    this._UsedMemory = this.MemoryLimit;
-                    if (!this.Exep.HasExited) this.Exep.Kill();
-                    throw new OutOfMemoryException();
+                    Exep.MaxWorkingSet = new IntPtr(MemoryLimit);
                 }
                 else
                 {
-                    this.Exep.MaxWorkingSet = new IntPtr(this.MemoryLimit);
-                    this._UsedMemory = this.Exep.PeakWorkingSet64;
+                    if (!Exep.HasExited) Exep.Kill();
+                    throw new OutOfMemoryException();
                 }
 
+
                 //输入数据
-                this.Exep.StandardInput.Write(inputData);
-                this.Exep.StandardInput.Close();
+                Exep.StandardInput.Write(thisProblem.StandardInput);
+                Exep.StandardInput.Close();
 
                 //等待进程结束
-                this.Exep.WaitForExit();
+                Exep.WaitForExit();
 
                 //输出数据
-                if (!this.Exep.StandardOutput.EndOfStream) this._OutputData.Append(this.Exep.StandardOutput.ReadToEnd());
+                thisAnswer.InputData = thisProblem.StandardInput;
+                thisAnswer.OutputData = Exep.StandardOutput.ReadToEnd();
             }
             catch (OutOfMemoryException)
             {
-                if (!this.Exep.HasExited) this.Exep.Kill();
-                if (this._IsSuccess)
-                    this._StatusCode = Const._StatusCode_MemoryLimitExceeded;
-                this._IsSuccess = false;
+                StatusCode = Const._StatusCode_MemoryLimitExceeded;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine(ex.Message);
-                if (!this.Exep.HasExited) this.Exep.Kill();
-                if (this._IsSuccess)
-                    this._StatusCode = Const._StatusCode_UnknownStatus;
-                this._IsSuccess = false;
+                StatusCode = Const._StatusCode_SystemError;
+                throw;
             }
             finally
             {
                 if (!Exep.HasExited) Exep.Kill();
-
-                if (this._IsSuccess)
+                switch (StatusCode)
                 {
-                    this._UsedTime = Convert.ToInt64(this.Exep.TotalProcessorTime.TotalMilliseconds);
-                    this._UsedMemory = Convert.ToInt64(this.Exep.PeakWorkingSet64);
+                    case Const._StatusCode_Accepted:
+                        Console.WriteLine("Exep.ExitCode: {0}", Exep.ExitCode);
+                        if (ExitCodeDictionary.ContainsKey(Exep.ExitCode))
+                        {
+                            StatusCode = Const._StatusCode_RuntimeError;
+                            Console.WriteLine("Exep.Exception: {0}", ExitCodeDictionary[Exep.ExitCode]);
+                            Console.WriteLine("Exep.StandardError: {0}", Exep.StandardError.ReadToEnd());
+                        }
+                        break;
+                    case Const._StatusCode_MemoryLimitExceeded:
+                        UsedMemory = MemoryLimit;
+                        break;
+                    case Const._StatusCode_TimeLimitExceeded:
+                        UsedTime = TimeLimit;
+                        break;
+                    default:
+                        throw new Exception();
                 }
             }
-            return this._IsSuccess;
+
+            return StatusCode;
         }
 
-
-        public bool RunClass(string dirPath, string classFileName, string inputData)
+        private static void Watch()
         {
-            this.Exep = new Process();
-            this.Exep.StartInfo.FileName = "java";
-            this.Exep.StartInfo.Arguments = "-cp " + dirPath + " " + classFileName.Split('.')[0];
-            this.Exep.StartInfo.CreateNoWindow = true;
-            this.Exep.StartInfo.UseShellExecute = false;
-            this.Exep.StartInfo.RedirectStandardInput = true;
-            this.Exep.StartInfo.RedirectStandardOutput = true;
-
-            try
+            while (!Exep.HasExited)
             {
-                this._StatusCode = 0;
-                this._IsSuccess = true;
-
-                //启动进程
-                this.Exep.Start();
-
-                //启动计时线程
-                Thread programRunner_TimeChecker = new Thread(Thread_ProgramRunner_TimeChecker);
-                programRunner_TimeChecker.Start();
-
-                //设置最大使用内存
-
-                if (this.Exep.MaxWorkingSet.ToInt64() > this.MemoryLimit)
+                try
                 {
-                    this._UsedMemory = this.MemoryLimit;
-                    if (!this.Exep.HasExited) this.Exep.Kill();
-                    throw new OutOfMemoryException();
+                    UsedTime = Convert.ToInt64(Exep.TotalProcessorTime.TotalMilliseconds);
+                    UsedMemory = Convert.ToInt64(Exep.PeakWorkingSet64);
                 }
-                else
+                catch (InvalidOperationException)
                 {
-                    this.Exep.MaxWorkingSet = new IntPtr(this.MemoryLimit);
-                    this._UsedMemory = this.Exep.PeakWorkingSet64;
+                    break;
                 }
-
-                //输入数据
-                this.Exep.StandardInput.Write(inputData);
-                this.Exep.StandardInput.Close();
-
-                //等待进程结束
-                this.Exep.WaitForExit();
-
-                //输出数据
-                if (!this.Exep.StandardOutput.EndOfStream) this._OutputData.Append(this.Exep.StandardOutput.ReadToEnd());
-            }
-            catch (OutOfMemoryException)
-            {
-                if (!this.Exep.HasExited) this.Exep.Kill();
-                if (this._IsSuccess)
-                    this._StatusCode = Const._StatusCode_MemoryLimitExceeded;
-                this._IsSuccess = false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                if (!this.Exep.HasExited) this.Exep.Kill();
-                if (this._IsSuccess)
-                    this._StatusCode = Const._StatusCode_UnknownStatus;
-                this._IsSuccess = false;
-            }
-            finally
-            {
-                if (!Exep.HasExited) Exep.Kill();
-
-                if (this._IsSuccess)
+                if (Exep.TotalProcessorTime.TotalMilliseconds > TimeLimit)
                 {
-                    this._UsedTime = Convert.ToInt64(this.Exep.TotalProcessorTime.TotalMilliseconds);
-                    this._UsedMemory = Convert.ToInt64(this.Exep.PeakWorkingSet64);
-                }
-            }
-            return this._IsSuccess;
-        }
-
-        private void Thread_ProgramRunner_TimeChecker()
-        {
-            while (!this.Exep.HasExited)
-            {
-                if (this.Exep.TotalProcessorTime.TotalMilliseconds > this.TimeLimit)
-                {
-                    if (!this.Exep.HasExited) this.Exep.Kill();
-                    this._IsSuccess = false;
-                    this._StatusCode = Const._StatusCode_TimeLimitExceeded;
-                    this._UsedTime = this.TimeLimit;
+                    if (!Exep.HasExited) Exep.Kill();
+                    StatusCode = Const._StatusCode_TimeLimitExceeded;
                     return;
                 }
             }
         }
+
     }
 }

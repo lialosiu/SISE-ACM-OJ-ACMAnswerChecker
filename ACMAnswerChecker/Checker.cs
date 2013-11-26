@@ -7,45 +7,36 @@ using System.IO;
 
 namespace ACMAnswerChecker
 {
-    class Checker
+    static class Checker
     {
-        private int _StatusCode;
-        public int StatusCode
+        public static Int16 StatusCode { get; private set; }
+
+        public static int Check(Answer thisAnswer, Problem thisProblem)
         {
-            get
-            {
-                return this._StatusCode;
-            }
-        }
+            string stdData = thisProblem.StandardOutput.Replace("\r", "");
+            string data = thisAnswer.OutputData.Replace("\r", "");
 
-        public bool Check(string stdOutputData, string outputData)
-        {
-            string StdData = stdOutputData.Replace("\r", "");
-            string Data = outputData.Replace("\r", "");
+            string stdDataNp = stdData.Replace("\n", "").Replace("\t", "").Replace(" ", "");
+            string dataNp = data.Replace("\n", "").Replace("\t", "").Replace(" ", "");
 
-            string StdData_NP = StdData.Replace("\n", "").Replace("\t", "").Replace(" ", "");
-            string Data_NP = Data.Replace("\n", "").Replace("\t", "").Replace(" ", "");
-
-            if (StdData.Length < Data.Length / 2)
+            if (stdData.Length < data.Length / 2)
             {
-                this._StatusCode = Const._StatusCode_OutputLimitExceeded;
-                return false;
+                StatusCode = Const._StatusCode_OutputLimitExceeded;
             }
-            else if (StdData == Data)
+            else if (stdData == data)
             {
-                this._StatusCode = Const._StatusCode_Accepted;
-                return true;
+                StatusCode = Const._StatusCode_Accepted;
             }
-            else if (StdData_NP == Data_NP)
+            else if (stdDataNp == dataNp)
             {
-                this._StatusCode = Const._StatusCode_PresentationError;
-                return false;
+                StatusCode = Const._StatusCode_PresentationError;
             }
             else
             {
-                this._StatusCode = Const._StatusCode_WrongAnswer;
-                return false;
+                StatusCode = Const._StatusCode_WrongAnswer;
             }
+
+            return StatusCode;
         }
     }
 }

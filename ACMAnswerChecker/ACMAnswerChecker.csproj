@@ -36,23 +36,24 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>.\mysql.data.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Answer.cs" />
     <Compile Include="Checker.cs" />
+    <Compile Include="CommandRunner.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="Const.cs" />
-    <Compile Include="DBUpdater.cs" />
+    <Compile Include="DatabaseConnector.cs" />
+    <Compile Include="Problem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runner.cs" />
+    <Compile Include="SocketConnector.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
