@@ -4,20 +4,22 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ACMAnswerChecker
 {
     static class Compiler
     {
-
+        public static Process Exep { get; private set; }
+        public static StringBuilder Error { get; private set; }
         public static string ErrorInfo { get; private set; }
 
         public static int Compile(string workingDirectory, Answer thisAnswer)
         {
             string srcFilePath;
 
-            var exep = new Process
+            Exep = new Process
             {
                 StartInfo =
                 {
@@ -32,18 +34,18 @@ namespace ACMAnswerChecker
             {
                 case Const._LanguageCode_C:
                     srcFilePath = workingDirectory + "Main.c";
-                    exep.StartInfo.FileName = "gcc";
-                    exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
+                    Exep.StartInfo.FileName = "gcc";
+                    Exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
                     break;
                 case Const._LanguageCode_CPP:
                     srcFilePath = workingDirectory + "Main.cpp";
-                    exep.StartInfo.FileName = "g++";
-                    exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -DONLINE_JUDGE";
+                    Exep.StartInfo.FileName = "g++";
+                    Exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -DONLINE_JUDGE";
                     break;
                 case Const._LanguageCode_Java:
                     srcFilePath = workingDirectory + "Main.java";
-                    exep.StartInfo.FileName = "javac";
-                    exep.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + srcFilePath;
+                    Exep.StartInfo.FileName = "javac";
+                    Exep.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + srcFilePath;
                     break;
                 default:
                     throw new Exception("不支持的语言类型");
@@ -53,16 +55,29 @@ namespace ACMAnswerChecker
             streamWriter.Write(thisAnswer.SourceCode);
             streamWriter.Close();
 
-            exep.Start();
-            exep.WaitForExit();
+            Exep.Start();
+            
+            //启动错误流监控线程
+            var threadWatchErrorStream = new Thread(WatchErrorStream);
+            threadWatchErrorStream.Start();
 
-            var exitCode = exep.ExitCode;
+            Exep.WaitForExit();
+
+            var exitCode = Exep.ExitCode;
             if (exitCode != 0)
             {
-                ErrorInfo = exep.StandardError.ReadToEnd();
+                ErrorInfo = Error.ToString();
             }
 
             return exitCode;
+        }
+
+        private static void WatchErrorStream()
+        {
+            while (!Exep.StandardError.EndOfStream)
+            {
+                Error.AppendLine(Exep.StandardError.ReadLine());
+            }
         }
 
     }
