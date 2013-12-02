@@ -8,6 +8,7 @@ namespace ACMAnswerChecker
     {
         public static string WebServerURL { get; private set; }
         public static string Key { get; private set; }
+        public static int Offset { get; private set; }
 
         static void Main(string[] args)
         {
@@ -42,7 +43,10 @@ namespace ACMAnswerChecker
                             case "PWD":
                                 pwd = v;
                                 break;
-                            case "OJWebServerURL":
+                            case "Offset":
+                                Offset = Convert.ToInt32(v);
+                                break;
+                            case "WebServerURL":
                                 WebServerURL = v;
                                 break;
                             case "Key":
