@@ -21,19 +21,19 @@ namespace ACMAnswerChecker
 
             if (stdData.Length < data.Length / 2)
             {
-                StatusCode = Const._StatusCode_OutputLimitExceeded;
+                StatusCode = Const.StatusCodeOutputLimitExceeded;
             }
             else if (stdData == data)
             {
-                StatusCode = Const._StatusCode_Accepted;
+                StatusCode = Const.StatusCodeAccepted;
             }
             else if (stdDataNp == dataNp)
             {
-                StatusCode = Const._StatusCode_PresentationError;
+                StatusCode = Const.StatusCodePresentationError;
             }
             else
             {
-                StatusCode = Const._StatusCode_WrongAnswer;
+                StatusCode = Const.StatusCodeWrongAnswer;
             }
 
             return StatusCode;

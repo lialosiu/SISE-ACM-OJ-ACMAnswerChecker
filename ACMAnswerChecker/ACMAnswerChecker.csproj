@@ -66,10 +66,10 @@
   <ItemGroup>
     <Compile Include="Answer.cs" />
     <Compile Include="Checker.cs" />
-    <Compile Include="CommandRunner.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="Const.cs" />
     <Compile Include="DatabaseConnector.cs" />
+    <Compile Include="PendingWatcher.cs" />
     <Compile Include="Problem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -79,7 +79,6 @@
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
     <Compile Include="Runner.cs" />
-    <Compile Include="SocketConnector.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

@@ -1,16 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ACMAnswerChecker
 {
     class Program
     {
-        public static string OJWebServerURL { get; private set; }
+        public static string WebServerURL { get; private set; }
         public static string Key { get; private set; }
 
         static void Main(string[] args)
@@ -19,7 +15,6 @@ namespace ACMAnswerChecker
             var database = "";
             var uid = "";
             var pwd = "";
-            var port = 0;
 
             var configStreamReader = File.OpenText(@"config.txt");
             while (!configStreamReader.EndOfStream)
@@ -47,11 +42,8 @@ namespace ACMAnswerChecker
                             case "PWD":
                                 pwd = v;
                                 break;
-                            case "Port":
-                                port = Convert.ToInt32(v);
-                                break;
                             case "OJWebServerURL":
-                                OJWebServerURL = v;
+                                WebServerURL = v;
                                 break;
                             case "Key":
                                 Key = v;
@@ -64,14 +56,15 @@ namespace ACMAnswerChecker
             }
             configStreamReader.Close();
 
+            Console.WriteLine("======================================================");
+            Console.WriteLine("[{0}] ACMAnswerChecker Started.", DateTime.Now);
+            Console.WriteLine("======================================================");
+
             Runner.InitExitCodeDictionary();
             DatabaseConnector.Init(server, database, uid, pwd);
-            SocketConnector.Init("0.0.0.0", port);
-            while (SocketConnector.ServerSocket.Connected)
-            {
-                Console.ReadLine();
-            }
-        }
+            PendingWatcher.StartWatcher();
 
+            Console.ReadLine();
+        }
     }
 }

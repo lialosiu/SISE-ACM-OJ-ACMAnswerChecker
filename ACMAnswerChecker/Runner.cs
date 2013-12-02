@@ -15,14 +15,16 @@ namespace ACMAnswerChecker
     {
         private static readonly Dictionary<long, string> ExitCodeDictionary = new Dictionary<long, string>();
 
-        public static Process Exep { get; private set; }
+        public static Process ThatProgramProcess { get; private set; }
         public static Int64 TimeLimit { get; private set; }
         public static Int64 MemoryLimit { get; private set; }
         public static Int64 UsedTime { get; private set; }
         public static Int64 UsedMemory { get; private set; }
         public static Int16 StatusCode { get; private set; }
         public static String Info { get; private set; }
-        public static StringBuilder Output { get; private set; }
+        public static StringBuilder OutputStringBuilder { get; private set; }
+        public static StringBuilder ErrorStringBuilder { get; private set; }
+        public static long OutputLimit { get; private set; }
 
         public static void InitExitCodeDictionary()
         {
@@ -68,11 +70,14 @@ namespace ACMAnswerChecker
             ExitCodeDictionary.Add(192, "STATUS_USER_APC");
         }
 
-        public static int Run(string workingDirectory, Answer thisAnswer, Problem thisProblem)
+        public static void Run(string workingDirectory, Answer thatAnswer, Problem thatProblem)
         {
-            Output = new StringBuilder();
+            StatusCode = Const.StatusCodeAccepted;
+            OutputStringBuilder = new StringBuilder();
+            ErrorStringBuilder = new StringBuilder();
+            OutputLimit = thatProblem.StandardOutput.Length * 2;
 
-            Exep = new Process
+            ThatProgramProcess = new Process
             {
                 StartInfo =
                 {
@@ -84,30 +89,28 @@ namespace ACMAnswerChecker
                 }
             };
 
-            switch (thisAnswer.LanguageCode)
+            switch (thatAnswer.LanguageCode)
             {
-                case Const._LanguageCode_C:
-                case Const._LanguageCode_CPP:
-                    Exep.StartInfo.FileName = workingDirectory + "Main.exe";
-                    TimeLimit = thisProblem.TimeLimitNormal;
-                    MemoryLimit = thisProblem.MemoryLimitNormal * 1000;
+                case Const.LanguageCodeC:
+                case Const.LanguageCodeCpp:
+                    ThatProgramProcess.StartInfo.FileName = workingDirectory + "Main.exe";
+                    TimeLimit = thatProblem.TimeLimitNormal;
+                    MemoryLimit = thatProblem.MemoryLimitNormal * 1000;
                     break;
-                case Const._LanguageCode_Java:
-                    Exep.StartInfo.FileName = "java";
-                    Exep.StartInfo.Arguments = "-cp " + workingDirectory + " " + "Main";
-                    TimeLimit = thisProblem.TimeLimitJava * 1000;
-                    MemoryLimit = thisProblem.MemoryLimitJava * 1000;
+                case Const.LanguageCodeJava:
+                    ThatProgramProcess.StartInfo.FileName = "java";
+                    ThatProgramProcess.StartInfo.Arguments = "-cp " + workingDirectory + " " + "Main";
+                    TimeLimit = thatProblem.TimeLimitJava * 1000;
+                    MemoryLimit = thatProblem.MemoryLimitJava * 1000;
                     break;
                 default:
                     throw new Exception("不支持的语言类型");
             }
 
-            StatusCode = Const._StatusCode_Accepted;
-
             try
             {
                 //启动进程
-                Exep.Start();
+                ThatProgramProcess.Start();
 
                 //启动时间内存监控线程
                 var threadWatchTimeAndMemory = new Thread(WatchTimeAndMemory);
@@ -117,103 +120,94 @@ namespace ACMAnswerChecker
                 var threadWatchOutputStream = new Thread(WatchOutputStream);
                 threadWatchOutputStream.Start();
 
+                //启动错误流监控线程
+                var threadWatchErrorStream = new Thread(WatchErrorStream);
+                threadWatchErrorStream.Start();
+
                 //设置最大使用内存
-                if (Exep.MaxWorkingSet.ToInt64() < MemoryLimit)
-                {
-                    Exep.MaxWorkingSet = new IntPtr(MemoryLimit);
-                }
+                if (ThatProgramProcess.MaxWorkingSet.ToInt64() < MemoryLimit)
+                    ThatProgramProcess.MaxWorkingSet = new IntPtr(MemoryLimit);
                 else
-                {
-                    if (!Exep.HasExited) Exep.Kill();
                     throw new OutOfMemoryException();
-                }
 
                 //输入数据
-                Exep.StandardInput.Write(thisProblem.StandardInput);
-                Exep.StandardInput.Close();
+                ThatProgramProcess.StandardInput.Write(thatProblem.StandardInput);
+                ThatProgramProcess.StandardInput.Close();
 
                 //等待进程结束
-                Exep.WaitForExit();
+                ThatProgramProcess.WaitForExit();
             }
             catch (OutOfMemoryException)
             {
-                try
-                {
-                    Exep.Kill();
-                }
-                catch { }
-                StatusCode = Const._StatusCode_MemoryLimitExceeded;
+                StatusCode = Const.StatusCodeMemoryLimitExceeded;
             }
             catch (IOException)
             {
             }
             catch (Exception)
             {
-                try
-                {
-                    Exep.Kill();
-                }
-                catch { }
-                StatusCode = Const._StatusCode_SystemError;
-                throw;
+                StatusCode = Const.StatusCodeSystemError;
             }
             finally
             {
-                //输出数据
-                thisAnswer.InputData = thisProblem.StandardInput;
-                thisAnswer.OutputData = Output.ToString();
-                var errorData = Exep.StandardError.ReadToEnd();
-
-                if (TimeLimit < UsedTime)
-                    StatusCode = Const._StatusCode_TimeLimitExceeded;
-                if (MemoryLimit < UsedMemory)
-                    StatusCode = Const._StatusCode_MemoryLimitExceeded;
+                //强制结束进程
+                try { ThatProgramProcess.Kill(); }
+                catch (Exception) { }
 
                 switch (StatusCode)
                 {
-                    case Const._StatusCode_Accepted:
-                        if (ExitCodeDictionary.ContainsKey(Exep.ExitCode))
+                    case Const.StatusCodeAccepted:
+                        if (ThatProgramProcess.ExitCode != 0)
                         {
-                            StatusCode = Const._StatusCode_RuntimeError;
-                            Info = ExitCodeDictionary[Exep.ExitCode];
+                            StatusCode = Const.StatusCodeRuntimeError;
+                            Info = ExitCodeDictionary.ContainsKey(ThatProgramProcess.ExitCode) ? ExitCodeDictionary[ThatProgramProcess.ExitCode] : ErrorStringBuilder.ToString();
                         }
-                        else if (Exep.ExitCode != 0)
+                        else if (ErrorStringBuilder.ToString() != "")
                         {
-                            StatusCode = Const._StatusCode_RuntimeError;
-                            Info = errorData;
-                        }
-                        else if (errorData != "")
-                        {
-                            StatusCode = Const._StatusCode_RuntimeError;
-                            Info = errorData;
-                        }
-                        else
-                        {
-                            StatusCode = Const._StatusCode_Accepted;
-                            Info = "";
+                            StatusCode = Const.StatusCodeRuntimeError;
+                            Info = ErrorStringBuilder.ToString();
                         }
                         break;
-                    case Const._StatusCode_MemoryLimitExceeded:
+                    case Const.StatusCodeMemoryLimitExceeded:
                         UsedMemory = MemoryLimit;
                         Info = "";
                         break;
-                    case Const._StatusCode_TimeLimitExceeded:
+                    case Const.StatusCodeTimeLimitExceeded:
                         UsedTime = TimeLimit;
+                        Info = "";
+                        break;
+                    case Const.StatusCodeOutputLimitExceeded:
                         Info = "";
                         break;
                     default:
                         throw new Exception("状态码错误");
                 }
             }
-
-            return StatusCode;
         }
 
         private static void WatchOutputStream()
         {
-            while (!Exep.StandardOutput.EndOfStream)
+            while (!ThatProgramProcess.StandardOutput.EndOfStream)
             {
-                Output.AppendLine(Exep.StandardOutput.ReadLine());
+                OutputStringBuilder.AppendLine(ThatProgramProcess.StandardOutput.ReadLine());
+
+                //检测OLE
+                if (OutputStringBuilder.Length > OutputLimit)
+                {
+                    //强制结束进程
+                    try { ThatProgramProcess.Kill(); }
+                    catch (Exception) { }
+                    StatusCode = Const.StatusCodeOutputLimitExceeded;
+                    break;
+                }
+            }
+        }
+
+        private static void WatchErrorStream()
+        {
+            while (!ThatProgramProcess.StandardError.EndOfStream)
+            {
+                ErrorStringBuilder.AppendLine(ThatProgramProcess.StandardError.ReadLine());
             }
         }
 
@@ -223,13 +217,13 @@ namespace ACMAnswerChecker
             long cpuIdleStartTime = 0;
             long lastUsedTime = 0;
 
-            while (!Exep.HasExited)
+            while (!ThatProgramProcess.HasExited)
             {
                 try
                 {
-                    UsedTime = Convert.ToInt64(Exep.TotalProcessorTime.TotalMilliseconds);
-                    UsedMemory = Convert.ToInt64(Exep.PeakWorkingSet64);
-                    
+                    UsedTime = Convert.ToInt64(ThatProgramProcess.TotalProcessorTime.TotalMilliseconds);
+                    UsedMemory = Convert.ToInt64(ThatProgramProcess.PeakWorkingSet64);
+
                     //检测是否挂起
                     if (UsedTime != lastUsedTime)
                     {
@@ -241,31 +235,44 @@ namespace ACMAnswerChecker
                     {
                         if (cpuIdleFlag == false)
                         {
-                            cpuIdleStartTime = Convert.ToInt64(DateTime.Now.Ticks);
+                            cpuIdleFlag = true;
+                            cpuIdleStartTime = DateTime.Now.Ticks;
                         }
-                        if ((Convert.ToInt64(DateTime.Now.Ticks) - cpuIdleStartTime) / 10 / 1000 / 1000 == 10)
+
+                        if ((DateTime.Now.Ticks - cpuIdleStartTime) / 10 / 1000 / 1000 == 10)
                         {
+                            //CPU空闲超过10秒,强制TLE
                             UsedTime = TimeLimit;
                         }
-                        cpuIdleFlag = true;
                     }
+
+                    //检测TLE
+                    if (UsedTime >= TimeLimit)
+                    {
+                        //强制结束进程
+                        try { ThatProgramProcess.Kill(); }
+                        catch (Exception) { }
+                        StatusCode = Const.StatusCodeTimeLimitExceeded;
+                        break;
+                    }
+
+                    //检测MLE
+                    if (UsedMemory >= MemoryLimit)
+                    {
+                        //强制结束进程
+                        try { ThatProgramProcess.Kill(); }
+                        catch (Exception) { }
+                        StatusCode = Const.StatusCodeMemoryLimitExceeded;
+                        break;
+                    }
+
                 }
                 catch (InvalidOperationException)
                 {
                     break;
                 }
-
-                if (UsedTime >= TimeLimit)
-                {
-                    try
-                    {
-                        Exep.Kill();
-                    }
-                    catch { }
-                    StatusCode = Const._StatusCode_TimeLimitExceeded;
-                    return;
-                }
             }
         }
+
     }
 }

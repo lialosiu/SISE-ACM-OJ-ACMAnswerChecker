@@ -1,25 +1,24 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace ACMAnswerChecker
 {
     static class Compiler
     {
-        public static Process Exep { get; private set; }
-        public static StringBuilder Error { get; private set; }
-        public static string ErrorInfo { get; private set; }
+        public static string SourceFilePath { get; private set; }
+        public static StringBuilder OutputStringBuilder { get; private set; }
+        public static StringBuilder ErrorStringBuilder { get; private set; }
+        public static Process CompilerProcess { get; private set; }
 
-        public static int Compile(string workingDirectory, Answer thisAnswer)
+        public static void Compile(string workingDirectory, Answer thatAnswer)
         {
-            string srcFilePath;
-
-            Exep = new Process
+            SourceFilePath = "";
+            OutputStringBuilder = new StringBuilder();
+            ErrorStringBuilder = new StringBuilder();
+            CompilerProcess = new Process
             {
                 StartInfo =
                 {
@@ -30,53 +29,60 @@ namespace ACMAnswerChecker
                 }
             };
 
-            switch (thisAnswer.LanguageCode)
+            switch (thatAnswer.LanguageCode)
             {
-                case Const._LanguageCode_C:
-                    srcFilePath = workingDirectory + "Main.c";
-                    Exep.StartInfo.FileName = "gcc";
-                    Exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
+                case Const.LanguageCodeC:
+                    SourceFilePath = workingDirectory + "Main.c";
+                    CompilerProcess.StartInfo.FileName = "gcc";
+                    CompilerProcess.StartInfo.Arguments = SourceFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE";
                     break;
-                case Const._LanguageCode_CPP:
-                    srcFilePath = workingDirectory + "Main.cpp";
-                    Exep.StartInfo.FileName = "g++";
-                    Exep.StartInfo.Arguments = srcFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -DONLINE_JUDGE";
+                case Const.LanguageCodeCpp:
+                    SourceFilePath = workingDirectory + "Main.cpp";
+                    CompilerProcess.StartInfo.FileName = "g++";
+                    CompilerProcess.StartInfo.Arguments = SourceFilePath + " -o " + workingDirectory + "Main.exe" + " -O2 -Wall -lm --static -DONLINE_JUDGE";
                     break;
-                case Const._LanguageCode_Java:
-                    srcFilePath = workingDirectory + "Main.java";
-                    Exep.StartInfo.FileName = "javac";
-                    Exep.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + srcFilePath;
+                case Const.LanguageCodeJava:
+                    SourceFilePath = workingDirectory + "Main.java";
+                    CompilerProcess.StartInfo.FileName = "javac";
+                    CompilerProcess.StartInfo.Arguments = "-J-Xms32m -J-Xmx256m " + SourceFilePath;
                     break;
                 default:
                     throw new Exception("不支持的语言类型");
             }
 
-            var streamWriter = new StreamWriter(File.Create(srcFilePath));
-            streamWriter.Write(thisAnswer.SourceCode);
-            streamWriter.Close();
+            //写入源文件
+            var thatSourceFileStreamWriter = new StreamWriter(File.Create(SourceFilePath));
+            thatSourceFileStreamWriter.Write(thatAnswer.SourceCode);
+            thatSourceFileStreamWriter.Close();
 
-            Exep.Start();
-            
+            //启动编译器
+            CompilerProcess.Start();
+
+            //启动输出流流监控线程
+            var threadWatchOutputStream = new Thread(WatchOutputStream);
+            threadWatchOutputStream.Start();
+
             //启动错误流监控线程
             var threadWatchErrorStream = new Thread(WatchErrorStream);
             threadWatchErrorStream.Start();
 
-            Exep.WaitForExit();
-
-            var exitCode = Exep.ExitCode;
-            if (exitCode != 0)
-            {
-                ErrorInfo = Error.ToString();
-            }
-
-            return exitCode;
+            //等待编译器编译完成
+            CompilerProcess.WaitForExit();
         }
 
         private static void WatchErrorStream()
         {
-            while (!Exep.StandardError.EndOfStream)
+            while (!CompilerProcess.StandardError.EndOfStream)
             {
-                Error.AppendLine(Exep.StandardError.ReadLine());
+                ErrorStringBuilder.AppendLine(CompilerProcess.StandardError.ReadLine());
+            }
+        }
+
+        private static void WatchOutputStream()
+        {
+            while (!CompilerProcess.StandardOutput.EndOfStream)
+            {
+                OutputStringBuilder.AppendLine(CompilerProcess.StandardOutput.ReadLine());
             }
         }
 
