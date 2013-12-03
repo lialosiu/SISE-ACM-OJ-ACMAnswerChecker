@@ -76,6 +76,7 @@ namespace ACMAnswerChecker
             OutputStringBuilder = new StringBuilder();
             ErrorStringBuilder = new StringBuilder();
             OutputLimit = thatProblem.StandardOutput.Length * 2;
+            Info = "";
 
             ThatProgramProcess = new Process
             {
@@ -144,9 +145,13 @@ namespace ACMAnswerChecker
             catch (IOException)
             {
             }
-            catch (Exception)
+            catch (InvalidOperationException)
+            {
+            }
+            catch (Exception exception)
             {
                 StatusCode = Const.StatusCodeSystemError;
+                Info = exception.Message;
             }
             finally
             {
@@ -179,6 +184,8 @@ namespace ACMAnswerChecker
                     case Const.StatusCodeOutputLimitExceeded:
                         Info = "";
                         break;
+                    case Const.StatusCodeSystemError:
+                        break;
                     default:
                         throw new Exception("状态码错误");
                 }
@@ -187,9 +194,13 @@ namespace ACMAnswerChecker
 
         private static void WatchOutputStream()
         {
+            var lockObj = new object();
             while (!ThatProgramProcess.StandardOutput.EndOfStream)
             {
-                OutputStringBuilder.AppendLine(ThatProgramProcess.StandardOutput.ReadLine());
+                lock (lockObj)
+                {
+                    OutputStringBuilder.AppendLine(ThatProgramProcess.StandardOutput.ReadLine());
+                }
 
                 //检测OLE
                 if (OutputStringBuilder.Length > OutputLimit)
@@ -205,9 +216,13 @@ namespace ACMAnswerChecker
 
         private static void WatchErrorStream()
         {
+            var lockObj = new object();
             while (!ThatProgramProcess.StandardError.EndOfStream)
             {
-                ErrorStringBuilder.AppendLine(ThatProgramProcess.StandardError.ReadLine());
+                lock (lockObj)
+                {
+                    ErrorStringBuilder.AppendLine(ThatProgramProcess.StandardError.ReadLine());
+                }
             }
         }
 

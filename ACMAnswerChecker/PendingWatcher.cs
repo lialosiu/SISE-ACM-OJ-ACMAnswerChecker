@@ -53,10 +53,6 @@ namespace ACMAnswerChecker
 
                             var thatProblem = DatabaseConnector.GetProblemById(thatAnswer.ProblemId);
 
-                            thatAnswer.StatusCode = Const.StatusCodeRunning;
-                            thatAnswer.UpdateMarkedTime();
-                            DatabaseConnector.UpdateAnswer(thatAnswer);
-
                             Console.WriteLine("[{0}] [AnswerID: {1}] [ProblemID: {2}] [UserID: {3}] Running...", DateTime.Now, thatAnswer.Id, thatAnswer.ProblemId, thatAnswer.UserId);
 
                             //更新数据库
@@ -87,13 +83,16 @@ namespace ACMAnswerChecker
 
                                 thatAnswer.StatusCode = Checker.StatusCode;
 
-                                StreamWriter inputStreamWriter = File.CreateText(workingDirectory + "in.txt");
-                                inputStreamWriter.Write(thatAnswer.InputData);
-                                inputStreamWriter.Close();
+                                if (thatAnswer.StatusCode == Const.StatusCodeWrongAnswer)
+                                {
+                                    StreamWriter inputStreamWriter = File.CreateText(workingDirectory + "in.txt");
+                                    inputStreamWriter.Write(thatAnswer.InputData);
+                                    inputStreamWriter.Close();
 
-                                StreamWriter outputStreamWriter = File.CreateText(workingDirectory + "out.txt");
-                                outputStreamWriter.Write(thatAnswer.OutputData);
-                                outputStreamWriter.Close();
+                                    StreamWriter outputStreamWriter = File.CreateText(workingDirectory + "out.txt");
+                                    outputStreamWriter.Write(thatAnswer.OutputData);
+                                    outputStreamWriter.Close();
+                                }
                             }
                         }
                     }
