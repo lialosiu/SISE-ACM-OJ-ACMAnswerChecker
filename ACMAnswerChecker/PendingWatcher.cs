@@ -159,8 +159,12 @@ namespace ACMAnswerChecker
                 else
                 {
                     //无Answer在Pending，坐等
-                    Console.WriteLine("[{0}] NoPendingAnswer,Waiting...", DateTime.Now);
-                    Thread.Sleep(2000);
+                    Console.Write("[{0}] No Answer Pending, Waiting.  \r", DateTime.Now);
+                    Thread.Sleep(1000);
+                    Console.Write("[{0}] No Answer Pending, Waiting.. \r", DateTime.Now);
+                    Thread.Sleep(1000);
+                    Console.Write("[{0}] No Answer Pending, Waiting...\r", DateTime.Now);
+                    Thread.Sleep(1000);
                 }
             }
         }
